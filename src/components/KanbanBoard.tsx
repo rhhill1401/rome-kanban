@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ContentItem, Column } from '@/types'
 import Card from './Card'
-import EditModal from './EditModal'
+import CardModal from './CardModal'
 
 interface KanbanBoardProps {
   data: Record<Column, ContentItem[]>
@@ -20,6 +20,7 @@ const columns: { id: Column; title: string; color: string }[] = [
 export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
   const [draggedItem, setDraggedItem] = useState<{ item: ContentItem; fromColumn: Column } | null>(null)
   const [editingItem, setEditingItem] = useState<ContentItem | null>(null)
+  const [addingToColumn, setAddingToColumn] = useState<Column | null>(null)
 
   const handleDragStart = (item: ContentItem, column: Column) => {
     setDraggedItem({ item, fromColumn: column })
@@ -47,35 +48,23 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
     setDraggedItem(null)
   }
 
-  const handleAddCard = (column: Column) => {
-    const title = prompt('Enter content title:')
-    if (!title) return
-
-    const typeInput = prompt('Type (short/story/song):') || 'short'
-    const type = ['short', 'story', 'song'].includes(typeInput) ? typeInput as ContentItem['type'] : 'short'
-
-    const newItem: ContentItem = {
-      id: Date.now().toString(),
-      type,
-      title,
-      theme: 'New',
-      date: 'TBD',
-    }
-
+  const handleSaveCard = (item: ContentItem, targetColumn?: Column) => {
     const newData = { ...data }
-    newData[column] = [...newData[column], newItem]
-    setData(newData)
-  }
 
-  const handleEditCard = (updatedItem: ContentItem) => {
-    const newData = { ...data }
-    for (const column of columns) {
-      const index = newData[column.id].findIndex(item => item.id === updatedItem.id)
-      if (index !== -1) {
-        newData[column.id][index] = updatedItem
-        break
+    if (targetColumn) {
+      // Adding new card
+      newData[targetColumn] = [...newData[targetColumn], item]
+    } else {
+      // Editing existing card
+      for (const column of columns) {
+        const index = newData[column.id].findIndex(i => i.id === item.id)
+        if (index !== -1) {
+          newData[column.id][index] = item
+          break
+        }
       }
     }
+
     setData({ ...newData })
   }
 
@@ -85,6 +74,11 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
       newData[column.id] = newData[column.id].filter(item => item.id !== id)
     }
     setData({ ...newData })
+  }
+
+  const closeModal = () => {
+    setEditingItem(null)
+    setAddingToColumn(null)
   }
 
   return (
@@ -117,7 +111,7 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
             </div>
 
             <button
-              onClick={() => handleAddCard(column.id)}
+              onClick={() => setAddingToColumn(column.id)}
               className="w-full mt-3 p-3 border-2 border-dashed border-white/20 rounded-lg text-white/40 hover:border-white/40 hover:text-white/60 transition"
             >
               + Add Card
@@ -126,13 +120,24 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
         ))}
       </div>
 
+      {/* Edit Card Modal */}
       {editingItem && (
-        <EditModal
+        <CardModal
           item={editingItem}
           isOpen={true}
-          onClose={() => setEditingItem(null)}
-          onSave={handleEditCard}
+          onClose={closeModal}
+          onSave={handleSaveCard}
           onDelete={handleDeleteCard}
+        />
+      )}
+
+      {/* Add Card Modal */}
+      {addingToColumn && (
+        <CardModal
+          targetColumn={addingToColumn}
+          isOpen={true}
+          onClose={closeModal}
+          onSave={handleSaveCard}
         />
       )}
     </>
