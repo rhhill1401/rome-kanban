@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ContentItem, Column } from '@/types'
 import Card from './Card'
+import EditModal from './EditModal'
 
 interface KanbanBoardProps {
   data: Record<Column, ContentItem[]>
@@ -18,6 +19,7 @@ const columns: { id: Column; title: string; color: string }[] = [
 
 export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
   const [draggedItem, setDraggedItem] = useState<{ item: ContentItem; fromColumn: Column } | null>(null)
+  const [editingItem, setEditingItem] = useState<ContentItem | null>(null)
 
   const handleDragStart = (item: ContentItem, column: Column) => {
     setDraggedItem({ item, fromColumn: column })
@@ -86,42 +88,53 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {columns.map(column => (
-        <div
-          key={column.id}
-          className="bg-white/5 rounded-xl p-4 min-h-[500px]"
-          onDragOver={handleDragOver}
-          onDrop={() => handleDrop(column.id)}
-        >
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
-            <div className={`w-3 h-3 rounded-full ${column.color}`} />
-            <h2 className="font-semibold text-sm">{column.title}</h2>
-            <span className="ml-auto bg-white/10 px-2 py-0.5 rounded-full text-xs">
-              {data[column.id].length}
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {data[column.id].map(item => (
-              <Card
-                key={item.id}
-                item={item}
-                onDragStart={() => handleDragStart(item, column.id)}
-                onEdit={handleEditCard}
-                onDelete={handleDeleteCard}
-              />
-            ))}
-          </div>
-
-          <button
-            onClick={() => handleAddCard(column.id)}
-            className="w-full mt-3 p-3 border-2 border-dashed border-white/20 rounded-lg text-white/40 hover:border-white/40 hover:text-white/60 transition"
+    <>
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {columns.map(column => (
+          <div
+            key={column.id}
+            className="bg-white/5 rounded-xl p-4 min-h-[500px]"
+            onDragOver={handleDragOver}
+            onDrop={() => handleDrop(column.id)}
           >
-            + Add Card
-          </button>
-        </div>
-      ))}
-    </div>
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+              <div className={`w-3 h-3 rounded-full ${column.color}`} />
+              <h2 className="font-semibold text-sm">{column.title}</h2>
+              <span className="ml-auto bg-white/10 px-2 py-0.5 rounded-full text-xs">
+                {data[column.id].length}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {data[column.id].map(item => (
+                <Card
+                  key={item.id}
+                  item={item}
+                  onDragStart={() => handleDragStart(item, column.id)}
+                  onClick={() => setEditingItem(item)}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => handleAddCard(column.id)}
+              className="w-full mt-3 p-3 border-2 border-dashed border-white/20 rounded-lg text-white/40 hover:border-white/40 hover:text-white/60 transition"
+            >
+              + Add Card
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {editingItem && (
+        <EditModal
+          item={editingItem}
+          isOpen={true}
+          onClose={() => setEditingItem(null)}
+          onSave={handleEditCard}
+          onDelete={handleDeleteCard}
+        />
+      )}
+    </>
   )
 }

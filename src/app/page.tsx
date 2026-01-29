@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react'
 import KanbanBoard from '@/components/KanbanBoard'
 import { ContentItem, Column } from '@/types'
+import { parseAnyDate, formatDate } from '@/components/DatePicker'
 
 type ViewFilter = 'this-week' | 'next-week' | 'all'
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const initialData: Record<Column, ContentItem[]> = {
   ideas: [
@@ -28,54 +31,25 @@ const initialData: Record<Column, ContentItem[]> = {
   ],
 }
 
-// Helper to parse dates from our format
-const parseDate = (dateStr: string): Date | null => {
-  if (dateStr === 'Future' || dateStr === 'TBD') return null
-
-  // Handle formats like "Fri Jan 31", "Mon Jan 26", "Jan 31", "Feb 3"
-  const months: Record<string, number> = {
-    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-  }
-
-  const parts = dateStr.split(' ')
-  let month: number | undefined
-  let day: number | undefined
-
-  for (const part of parts) {
-    if (months[part] !== undefined) {
-      month = months[part]
-    }
-    const num = parseInt(part)
-    if (!isNaN(num) && num >= 1 && num <= 31) {
-      day = num
-    }
-  }
-
-  if (month !== undefined && day !== undefined) {
-    return new Date(2026, month, day)
-  }
-  return null
-}
-
-// Get week boundaries
+// Get week boundaries based on actual current date
 const getWeekBoundaries = () => {
-  const today = new Date(2026, 0, 29) // Jan 29, 2026 (current date)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
   const dayOfWeek = today.getDay()
 
-  // This week: Sun Jan 26 - Sat Feb 1
+  // This week: Sunday to Saturday containing today
   const thisWeekStart = new Date(today)
   thisWeekStart.setDate(today.getDate() - dayOfWeek)
   const thisWeekEnd = new Date(thisWeekStart)
   thisWeekEnd.setDate(thisWeekStart.getDate() + 6)
 
-  // Next week: Sun Feb 2 - Sat Feb 8
+  // Next week: Sunday to Saturday after this week
   const nextWeekStart = new Date(thisWeekEnd)
   nextWeekStart.setDate(thisWeekEnd.getDate() + 1)
   const nextWeekEnd = new Date(nextWeekStart)
   nextWeekEnd.setDate(nextWeekStart.getDate() + 6)
 
-  return { thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd }
+  return { today, thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd }
 }
 
 const filterDataByView = (data: Record<Column, ContentItem[]>, view: ViewFilter): Record<Column, ContentItem[]> => {
@@ -84,7 +58,7 @@ const filterDataByView = (data: Record<Column, ContentItem[]>, view: ViewFilter)
   const { thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd } = getWeekBoundaries()
 
   const isInRange = (item: ContentItem, start: Date, end: Date): boolean => {
-    const date = parseDate(item.date)
+    const date = parseAnyDate(item.date)
     if (!date) return false // Exclude Future/TBD items in filtered views
     return date >= start && date <= end
   }
@@ -110,16 +84,38 @@ const filterDataByView = (data: Record<Column, ContentItem[]>, view: ViewFilter)
 }
 
 const getWeekLabel = (view: ViewFilter): string => {
-  if (view === 'this-week') return 'Week of Jan 27 - Feb 2, 2026'
-  if (view === 'next-week') return 'Week of Feb 3 - Feb 9, 2026'
+  const { today, thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd } = getWeekBoundaries()
+
+  const formatRange = (start: Date, end: Date) => {
+    const startMonth = MONTHS[start.getMonth()]
+    const endMonth = MONTHS[end.getMonth()]
+    const year = end.getFullYear()
+
+    if (startMonth === endMonth) {
+      return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${year}`
+    }
+    return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${year}`
+  }
+
+  if (view === 'this-week') {
+    return `This Week: ${formatRange(thisWeekStart, thisWeekEnd)}`
+  }
+  if (view === 'next-week') {
+    return `Next Week: ${formatRange(nextWeekStart, nextWeekEnd)}`
+  }
   return 'All Content'
 }
 
 export default function Home() {
   const [data, setData] = useState<Record<Column, ContentItem[]>>(initialData)
   const [view, setView] = useState<ViewFilter>('this-week')
+  const [currentDate, setCurrentDate] = useState<string>('')
 
   useEffect(() => {
+    // Set current date on client side to avoid hydration mismatch
+    const now = new Date()
+    setCurrentDate(formatDate(now))
+
     const saved = localStorage.getItem('kanban-data')
     if (saved) {
       setData(JSON.parse(saved))
@@ -144,6 +140,9 @@ export default function Home() {
           Rome&apos;s Storybook Content Board
         </h1>
         <p className="text-gray-400 text-sm mt-1">{getWeekLabel(view)}</p>
+        {currentDate && (
+          <p className="text-gray-500 text-xs mt-1">Today: {currentDate}</p>
+        )}
       </header>
 
       <div className="flex justify-center gap-3 mb-6">
@@ -184,7 +183,7 @@ export default function Home() {
       <div className="max-w-6xl mx-auto mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white/5 rounded-xl p-5 text-center">
           <h3 className="text-3xl font-bold text-blue-400">{totalViews.toLocaleString()}</h3>
-          <p className="text-gray-400 text-sm">Total Views This Week</p>
+          <p className="text-gray-400 text-sm">Total Views</p>
         </div>
         <div className="bg-white/5 rounded-xl p-5 text-center">
           <h3 className="text-3xl font-bold text-green-400">+{totalSubs}</h3>
