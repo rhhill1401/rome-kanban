@@ -65,6 +65,26 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
     setData(newData)
   }
 
+  const handleEditCard = (updatedItem: ContentItem) => {
+    const newData = { ...data }
+    for (const column of columns) {
+      const index = newData[column.id].findIndex(item => item.id === updatedItem.id)
+      if (index !== -1) {
+        newData[column.id][index] = updatedItem
+        break
+      }
+    }
+    setData({ ...newData })
+  }
+
+  const handleDeleteCard = (id: string) => {
+    const newData = { ...data }
+    for (const column of columns) {
+      newData[column.id] = newData[column.id].filter(item => item.id !== id)
+    }
+    setData({ ...newData })
+  }
+
   return (
     <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {columns.map(column => (
@@ -88,6 +108,8 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
                 key={item.id}
                 item={item}
                 onDragStart={() => handleDragStart(item, column.id)}
+                onEdit={handleEditCard}
+                onDelete={handleDeleteCard}
               />
             ))}
           </div>

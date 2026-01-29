@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import KanbanBoard from '@/components/KanbanBoard'
 import { ContentItem, Column } from '@/types'
 
+type ViewFilter = 'this-week' | 'next-week' | 'all'
+
 const initialData: Record<Column, ContentItem[]> = {
   ideas: [
     { id: '1', type: 'short', title: 'When the floor is actually lava', theme: 'Humor/Play', date: 'Future' },
@@ -26,8 +28,96 @@ const initialData: Record<Column, ContentItem[]> = {
   ],
 }
 
+// Helper to parse dates from our format
+const parseDate = (dateStr: string): Date | null => {
+  if (dateStr === 'Future' || dateStr === 'TBD') return null
+
+  // Handle formats like "Fri Jan 31", "Mon Jan 26", "Jan 31", "Feb 3"
+  const months: Record<string, number> = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  }
+
+  const parts = dateStr.split(' ')
+  let month: number | undefined
+  let day: number | undefined
+
+  for (const part of parts) {
+    if (months[part] !== undefined) {
+      month = months[part]
+    }
+    const num = parseInt(part)
+    if (!isNaN(num) && num >= 1 && num <= 31) {
+      day = num
+    }
+  }
+
+  if (month !== undefined && day !== undefined) {
+    return new Date(2026, month, day)
+  }
+  return null
+}
+
+// Get week boundaries
+const getWeekBoundaries = () => {
+  const today = new Date(2026, 0, 29) // Jan 29, 2026 (current date)
+  const dayOfWeek = today.getDay()
+
+  // This week: Sun Jan 26 - Sat Feb 1
+  const thisWeekStart = new Date(today)
+  thisWeekStart.setDate(today.getDate() - dayOfWeek)
+  const thisWeekEnd = new Date(thisWeekStart)
+  thisWeekEnd.setDate(thisWeekStart.getDate() + 6)
+
+  // Next week: Sun Feb 2 - Sat Feb 8
+  const nextWeekStart = new Date(thisWeekEnd)
+  nextWeekStart.setDate(thisWeekEnd.getDate() + 1)
+  const nextWeekEnd = new Date(nextWeekStart)
+  nextWeekEnd.setDate(nextWeekStart.getDate() + 6)
+
+  return { thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd }
+}
+
+const filterDataByView = (data: Record<Column, ContentItem[]>, view: ViewFilter): Record<Column, ContentItem[]> => {
+  if (view === 'all') return data
+
+  const { thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd } = getWeekBoundaries()
+
+  const isInRange = (item: ContentItem, start: Date, end: Date): boolean => {
+    const date = parseDate(item.date)
+    if (!date) return false // Exclude Future/TBD items in filtered views
+    return date >= start && date <= end
+  }
+
+  const filtered: Record<Column, ContentItem[]> = {
+    ideas: [],
+    production: [],
+    review: [],
+    published: [],
+  }
+
+  for (const column of ['ideas', 'production', 'review', 'published'] as Column[]) {
+    filtered[column] = data[column].filter(item => {
+      if (view === 'this-week') {
+        return isInRange(item, thisWeekStart, thisWeekEnd)
+      } else {
+        return isInRange(item, nextWeekStart, nextWeekEnd)
+      }
+    })
+  }
+
+  return filtered
+}
+
+const getWeekLabel = (view: ViewFilter): string => {
+  if (view === 'this-week') return 'Week of Jan 27 - Feb 2, 2026'
+  if (view === 'next-week') return 'Week of Feb 3 - Feb 9, 2026'
+  return 'All Content'
+}
+
 export default function Home() {
   const [data, setData] = useState<Record<Column, ContentItem[]>>(initialData)
+  const [view, setView] = useState<ViewFilter>('this-week')
 
   useEffect(() => {
     const saved = localStorage.getItem('kanban-data')
@@ -40,6 +130,8 @@ export default function Home() {
     localStorage.setItem('kanban-data', JSON.stringify(data))
   }, [data])
 
+  const displayData = filterDataByView(data, view)
+
   const totalViews = data.published.reduce((sum, item) => sum + (item.views || 0), 0)
   const totalSubs = data.published.reduce((sum, item) => sum + (item.subs || 0), 0)
   const totalShorts = Object.values(data).flat().filter(item => item.type === 'short').length
@@ -51,22 +143,43 @@ export default function Home() {
         <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
           Rome&apos;s Storybook Content Board
         </h1>
-        <p className="text-gray-400 text-sm mt-1">Week of Jan 27 - Feb 2, 2026</p>
+        <p className="text-gray-400 text-sm mt-1">{getWeekLabel(view)}</p>
       </header>
 
       <div className="flex justify-center gap-3 mb-6">
-        <button className="px-4 py-2 rounded-full font-semibold bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900">
+        <button
+          onClick={() => setView('this-week')}
+          className={`px-4 py-2 rounded-full font-semibold transition ${
+            view === 'this-week'
+              ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900'
+              : 'bg-white/10 text-white hover:bg-white/20'
+          }`}
+        >
           This Week
         </button>
-        <button className="px-4 py-2 rounded-full font-semibold bg-white/10 text-white hover:bg-white/20 transition">
+        <button
+          onClick={() => setView('next-week')}
+          className={`px-4 py-2 rounded-full font-semibold transition ${
+            view === 'next-week'
+              ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900'
+              : 'bg-white/10 text-white hover:bg-white/20'
+          }`}
+        >
           Next Week
         </button>
-        <button className="px-4 py-2 rounded-full font-semibold bg-white/10 text-white hover:bg-white/20 transition">
+        <button
+          onClick={() => setView('all')}
+          className={`px-4 py-2 rounded-full font-semibold transition ${
+            view === 'all'
+              ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900'
+              : 'bg-white/10 text-white hover:bg-white/20'
+          }`}
+        >
           All Content
         </button>
       </div>
 
-      <KanbanBoard data={data} setData={setData} />
+      <KanbanBoard data={displayData} setData={setData} />
 
       <div className="max-w-6xl mx-auto mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white/5 rounded-xl p-5 text-center">
