@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ContentItem, ContentType, Column } from '@/types'
 import DatePicker from './DatePicker'
+import TimePicker from './TimePicker'
 
 interface CardModalProps {
   // For editing - pass the item
@@ -117,12 +118,10 @@ export default function CardModal({ item, targetColumn, isOpen, onClose, onSave,
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Time</label>
-              <input
-                type="text"
+              <TimePicker
                 value={formData.time || ''}
-                onChange={(e) => setFormData({ ...formData, time: e.target.value || undefined })}
-                placeholder="e.g. 3:30 PM"
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-white/40"
+                onChange={(time) => setFormData({ ...formData, time: time || undefined })}
+                placeholder="e.g. 3pm"
               />
             </div>
           </div>
