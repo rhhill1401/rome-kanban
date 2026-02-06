@@ -1,11 +1,26 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import KanbanBoard from '@/components/KanbanBoard'
 import { ContentItem, Column } from '@/types'
 import { parseAnyDate, formatDate } from '@/components/DatePicker'
 
 type ViewFilter = 'this-week' | 'next-week' | 'all'
+
+// Debounce helper
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => clearTimeout(handler)
+  }, [value, delay])
+
+  return debouncedValue
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -110,21 +125,89 @@ export default function Home() {
   const [data, setData] = useState<Record<Column, ContentItem[]>>(initialData)
   const [view, setView] = useState<ViewFilter>('this-week')
   const [currentDate, setCurrentDate] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const isInitialMount = useRef(true)
 
+  // Debounce data changes for auto-save (2 second delay)
+  const debouncedData = useDebounce(data, 2000)
+
+  // Load data from Google Sheets on mount
   useEffect(() => {
-    // Set current date on client side to avoid hydration mismatch
     const now = new Date()
     setCurrentDate(formatDate(now))
 
-    const saved = localStorage.getItem('kanban-data')
-    if (saved) {
-      setData(JSON.parse(saved))
+    async function loadData() {
+      try {
+        const response = await fetch('/api/sheets')
+        if (response.ok) {
+          const sheetData = await response.json()
+          // Only use sheet data if it has content
+          const hasContent = Object.values(sheetData).some((arr: any) => arr.length > 0)
+          if (hasContent) {
+            setData(sheetData)
+          }
+        } else {
+          // Fallback to localStorage if API fails
+          const saved = localStorage.getItem('kanban-data')
+          if (saved) {
+            setData(JSON.parse(saved))
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load from Google Sheets, using localStorage:', err)
+        const saved = localStorage.getItem('kanban-data')
+        if (saved) {
+          setData(JSON.parse(saved))
+        }
+      } finally {
+        setLoading(false)
+      }
     }
+
+    loadData()
   }, [])
 
+  // Save to Google Sheets when debounced data changes
   useEffect(() => {
-    localStorage.setItem('kanban-data', JSON.stringify(data))
-  }, [data])
+    // Skip initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+
+    // Skip if still loading initial data
+    if (loading) return
+
+    async function saveData() {
+      setSaving(true)
+      setError(null)
+
+      try {
+        // Always save to localStorage as backup
+        localStorage.setItem('kanban-data', JSON.stringify(debouncedData))
+
+        // Save to Google Sheets
+        const response = await fetch('/api/sheets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(debouncedData),
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to save to Google Sheets')
+        }
+      } catch (err) {
+        console.error('Save error:', err)
+        setError('Failed to sync with Google Sheets')
+      } finally {
+        setSaving(false)
+      }
+    }
+
+    saveData()
+  }, [debouncedData, loading])
 
   const displayData = filterDataByView(data, view)
 
@@ -133,6 +216,17 @@ export default function Home() {
   const totalShorts = Object.values(data).flat().filter(item => item.type === 'short').length
   const totalStories = Object.values(data).flat().filter(item => item.type === 'story').length
 
+  if (loading) {
+    return (
+      <main className="min-h-screen p-5 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading from Google Sheets...</p>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen p-5 text-white">
       <header className="text-center mb-8">
@@ -140,9 +234,26 @@ export default function Home() {
           Rome&apos;s Storybook Content Board
         </h1>
         <p className="text-gray-400 text-sm mt-1">{getWeekLabel(view)}</p>
-        {currentDate && (
-          <p className="text-gray-500 text-xs mt-1">Today: {currentDate}</p>
-        )}
+        <div className="flex items-center justify-center gap-2 mt-1">
+          {currentDate && (
+            <p className="text-gray-500 text-xs">Today: {currentDate}</p>
+          )}
+          {saving && (
+            <span className="text-xs text-yellow-400 flex items-center gap-1">
+              <span className="animate-pulse">●</span> Syncing...
+            </span>
+          )}
+          {!saving && !error && !loading && (
+            <span className="text-xs text-green-400 flex items-center gap-1">
+              ● Synced
+            </span>
+          )}
+          {error && (
+            <span className="text-xs text-red-400 flex items-center gap-1">
+              ● {error}
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="flex justify-center gap-3 mb-6">
