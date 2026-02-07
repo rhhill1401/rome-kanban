@@ -76,31 +76,58 @@ export async function saveSheetData(data: Record<string, any[]>) {
   const sheets = google.sheets({ version: 'v4', auth })
 
   try {
-    // Flatten data with column info
+    // First, read existing data to preserve rows not in the incoming data
+    const existingResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Kanban!A:I',
+    })
+
+    const existingRows = existingResponse.data.values || []
+    const existingById = new Map<string, string[]>()
+
+    // Skip header, index existing rows by ID
+    if (existingRows.length > 1) {
+      existingRows.slice(1).forEach(row => {
+        if (row[0]) {
+          existingById.set(row[0], row as string[])
+        }
+      })
+    }
+
+    // Build new data from incoming kanban data
+    const incomingIds = new Set<string>()
+    for (const [column, items] of Object.entries(data)) {
+      for (const item of items) {
+        if (item.id) {
+          incomingIds.add(item.id)
+          existingById.set(item.id, [
+            item.id || '',
+            item.type || '',
+            item.title || '',
+            item.theme || '',
+            item.date || '',
+            item.time || '',
+            item.views?.toString() || '',
+            item.subs?.toString() || '',
+            column,
+          ])
+        }
+      }
+    }
+
+    // Build final rows: header + all data (merged)
     const rows: string[][] = [
       ['id', 'type', 'title', 'theme', 'date', 'time', 'views', 'subs', 'column']
     ]
 
-    for (const [column, items] of Object.entries(data)) {
-      for (const item of items) {
-        rows.push([
-          item.id || '',
-          item.type || '',
-          item.title || '',
-          item.theme || '',
-          item.date || '',
-          item.time || '',
-          item.views?.toString() || '',
-          item.subs?.toString() || '',
-          column,
-        ])
-      }
-    }
+    existingById.forEach((row) => {
+      rows.push(row)
+    })
 
-    // Clear existing data and write new data
+    // Clear and write merged data
     await sheets.spreadsheets.values.clear({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Kanban!A:J',
+      range: 'Kanban!A:I',
     })
 
     await sheets.spreadsheets.values.update({
