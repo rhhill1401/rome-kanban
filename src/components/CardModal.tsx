@@ -91,6 +91,8 @@ export default function CardModal({ item, targetColumn, isOpen, onClose, onSave,
               className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-white/40"
             >
               <option value="short">Short</option>
+              <option value="long">Long Form</option>
+              <option value="task">Task</option>
               <option value="story">Story</option>
               <option value="song">Song</option>
             </select>

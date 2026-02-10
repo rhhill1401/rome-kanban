@@ -1,4 +1,15 @@
-export type ContentType = 'short' | 'story' | 'song'
+export type ContentType =
+  | 'short'
+  | 'story'
+  | 'song'
+  | 'task'
+  | 'long'
+  | 'song-release'
+  | 'deadline'
+  | 'release'
+  | 'setup'
+  | 'video'
+  | 'short-series'
 
 export type Column = 'ideas' | 'production' | 'review' | 'published'
 
