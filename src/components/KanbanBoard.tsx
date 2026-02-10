@@ -104,6 +104,7 @@ export default function KanbanBoard({ data, setData }: KanbanBoardProps) {
                 <Card
                   key={item.id}
                   item={item}
+                  column={column.id}
                   onDragStart={() => handleDragStart(item, column.id)}
                   onClick={() => setEditingItem(item)}
                 />
